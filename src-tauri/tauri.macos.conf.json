@@ -2,8 +2,7 @@
   "bundle": {
     "createUpdaterArtifacts": false,
     "targets": [
-      "app",
-      "dmg"
+      "app"
     ]
   }
 }

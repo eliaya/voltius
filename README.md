@@ -247,12 +247,19 @@ pnpm install --frozen-lockfile
 pnpm run build:mac:arm64
 ```
 
-This uses `src-tauri/tauri.macos.conf.json` to produce local `.app` and `.dmg` artifacts without updater signing assets. Outputs are placed under:
+This uses `src-tauri/tauri.macos.conf.json` to produce a local unsigned `.app` without updater signing assets. Output is placed under:
 
 ```text
 src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Voltius.app
-src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/
 ```
+
+To also create a DMG, run:
+
+```bash
+pnpm run build:mac:arm64:dmg
+```
+
+If DMG creation fails at `bundle_dmg.sh`, the `.app` bundle is usually still available under `bundle/macos/`. DMG packaging uses macOS Finder automation; grant Automation permission to the terminal app running the build in System Settings, or run the default `.app` build above for local use.
 
 For unsigned local builds, macOS may require right-clicking the app and choosing Open on first launch.
 
