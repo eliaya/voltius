@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import type { PluginAPI, PluginConnectionInput, PluginManifest, PluginRegisterFn } from "@/plugins/api";
 import type { JumpHost } from "@/types";
+import { identityFileCandidates, parseSshConfig } from "./parser";
 
 // ─── Manifest ────────────────────────────────────────────────────────────────
 
@@ -17,61 +18,6 @@ export const manifest: PluginManifest = {
   ],
   defaultEnabled: true,
 };
-
-// ─── SSH config parser ────────────────────────────────────────────────────────
-
-interface SshHost {
-  alias: string;
-  hostname: string;
-  user: string;
-  port: number;
-  identityFile?: string;
-  proxyJump?: string; // raw ProxyJump value (e.g. "bastion" or "user@host:22,host2")
-}
-
-function parseSshConfig(content: string): SshHost[] {
-  const hosts: SshHost[] = [];
-  let current: Partial<SshHost> | null = null;
-
-  for (const rawLine of content.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-
-    const spaceIdx = line.search(/\s/);
-    if (spaceIdx === -1) continue;
-
-    const key = line.slice(0, spaceIdx).toLowerCase();
-    const value = line.slice(spaceIdx).trim();
-
-    if (key === "host") {
-      // Flush previous
-      if (current?.hostname && current?.user) {
-        hosts.push(current as SshHost);
-      }
-      // Skip wildcards and patterns
-      if (value.includes("*") || value.includes("?") || value.includes("!")) {
-        current = null;
-      } else {
-        current = { alias: value, port: 22 };
-      }
-    } else if (current) {
-      switch (key) {
-        case "hostname":     current.hostname = value; break;
-        case "user":         current.user = value; break;
-        case "port":         current.port = parseInt(value, 10) || 22; break;
-        case "identityfile": current.identityFile = value; break;
-        case "proxyjump":    current.proxyJump = value; break;
-      }
-    }
-  }
-
-  // Flush last
-  if (current?.hostname && current?.user) {
-    hosts.push(current as SshHost);
-  }
-
-  return hosts;
-}
 
 // ─── ProxyJump helpers ───────────────────────────────────────────────────────
 
@@ -217,8 +163,8 @@ async function sync(api: PluginAPI): Promise<void> {
   for (const host of hosts) {
     // Resolve identity: create key + identity if IdentityFile is set
     let identityId: string | undefined;
-    if (host.identityFile) {
-      const keyId = await ensureKey(api, host.identityFile, keyMap, allKeys, notifyEnabled);
+    for (const candidate of identityFileCandidates(host)) {
+      const keyId = await ensureKey(api, candidate, keyMap, allKeys, notifyEnabled);
       if (keyId) {
         if (identityMap[host.alias]) {
           const stillExists = allIdentities.find((i) => i.id === identityMap[host.alias]);
@@ -248,6 +194,7 @@ async function sync(api: PluginAPI): Promise<void> {
             if (notifyEnabled) api.notifications.toast(`SSH identity created: ${host.alias}`, { severity: "success", duration: 3000 });
           }
         }
+        break;
       }
     }
 
